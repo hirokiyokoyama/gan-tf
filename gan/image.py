@@ -1,19 +1,27 @@
 import tensorflow as tf
 
+def _default_postprocess_fn(x):
+    return (x + 1.) / 2.
+    
 class ImageGenerator(tf.keras.Model):
     def __init__(self,
                  model,
                  summary_name = 'generated_image',
                  summary_kwargs = {},
+                 summary_postprocess_fn = _default_postprocess_fn,
                  **kwargs):
         super().__init__(**kwargs)
         self.model = model
         self.summary_name = summary_name
         self.summary_kwargs = summary_kwargs
+        self.summary_postprocess = summary_postprocess_fn
 
     def call(self, x):
         y = self.model(x)
-        tf.summary.image(self.summary_name, y, **self.summary_kwargs)
+        tf.summary.image(
+            self.summary_name,
+            self.summary_postprocess(y),
+            **self.summary_kwargs)
         return y
 
 class ImageDiscriminator(tf.keras.Model):
@@ -71,19 +79,20 @@ class ImageDiscriminator(tf.keras.Model):
     def call(self, x):
         y, h = self.model(x)
 
-        for name, decoder in self.reconstruction_models.items():
-            params = self.reconstruction_params[name]
-            hidden = h[name]
-            if params['crop']:
-                part = tf.random.uniform([], 0, 4, dtype=tf.int32)
-                x = self._crop(x, part)
-                hidden = self._crop(hidden, part)
-            reconst = decoder(hidden)
-            tf.summary.image(
-                params['summary_name'],
-                params['postprocess'](reconst),
-                **params['summary_kwargs'])
-            x_small = tf.image.resize(x, tf.shape(reconst)[1:3])
-            loss = tf.reduce_mean(params['loss'](x_small, reconst))
-            self.add_loss(loss * params['weight'])
+        if self.trainable:
+            for name, decoder in self.reconstruction_models.items():
+                params = self.reconstruction_params[name]
+                hidden = h[name]
+                if params['crop']:
+                    part = tf.random.uniform([], 0, 4, dtype=tf.int32)
+                    x = self._crop(x, part)
+                    hidden = self._crop(hidden, part)
+                reconst = decoder(hidden)
+                tf.summary.image(
+                    params['summary_name'],
+                    params['postprocess'](reconst),
+                    **params['summary_kwargs'])
+                x_small = tf.image.resize(x, tf.shape(reconst)[1:3])
+                loss = tf.reduce_mean(params['loss'](x_small, reconst))
+                self.add_loss(loss * params['weight'])
         return y
