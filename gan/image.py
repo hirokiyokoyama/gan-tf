@@ -28,11 +28,10 @@ class ImageDiscriminator(tf.keras.Model):
     def _default_postprocess_fn(x):
         return (x + 1.) / 2.
 
-    def __init__(self, model, channels=3, **kwargs):
+    def __init__(self, model, **kwargs):
         super().__init__(**kwargs)
         self.model = tf.keras.Model(
             model.input, (model.output, {}))
-        self.channels = channels
         self.reconstruction_models = {}
         self.reconstruction_params = {}
 
