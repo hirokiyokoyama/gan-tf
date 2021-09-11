@@ -81,17 +81,25 @@ class ImageDiscriminator(tf.keras.Model):
         if self.trainable:
             for name, decoder in self.reconstruction_models.items():
                 params = self.reconstruction_params[name]
+                image = x
                 hidden = h[name]
+                #print(tf.shape(image)[0] % 2)
+                #if tf.shape(image)[0] % 2 == 0:
+                n = tf.shape(image)[0] // 2
+                #image, _ = tf.split(image, 2, axis=0)
+                #hidden, _ = tf.split(hidden, 2, axis=0)
+                image = image[:n]
+                hidden = hidden[:n]
                 if params['crop']:
                     part = tf.random.uniform([], 0, 4, dtype=tf.int32)
-                    x = self._crop(x, part)
+                    image = self._crop(image, part)
                     hidden = self._crop(hidden, part)
                 reconst = decoder(hidden)
                 tf.summary.image(
                     params['summary_name'],
                     params['postprocess'](reconst),
                     **params['summary_kwargs'])
-                x_small = tf.image.resize(x, tf.shape(reconst)[1:3])
-                loss = tf.reduce_mean(params['loss'](x_small, reconst))
+                image = tf.image.resize(image, tf.shape(reconst)[1:3])
+                loss = tf.reduce_mean(params['loss'](image, reconst))
                 self.add_loss(loss * params['weight'])
         return y
