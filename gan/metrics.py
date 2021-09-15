@@ -27,19 +27,30 @@ class FID(tf.keras.metrics.Metric):
             pooling = 'avg',
             input_shape = shape)
         self.inception_dim = int(self.inception_model.compute_output_shape([None]+shape)[-1])
+        self.update_real = True
+        self.update_fake = True
     
     def reset_state(self):
-        self.real_moment1.reset_state()
-        self.real_moment2.reset_state()
-        self.fake_moment1.reset_state()
-        self.fake_moment2.reset_state()
+        if self.update_real:
+            self.real_moment1.reset_state()
+            self.real_moment2.reset_state()
+        if self.update_fake:
+            self.fake_moment1.reset_state()
+            self.fake_moment2.reset_state()
 
     def update_state(self, y_true, y_pred, sample_weight=None):
         n_real = tf.shape(y_true)[0]
         n_fake = tf.shape(y_pred)[0]
 
         # adapt to InceptionV3
-        y = tf.concat([y_true, y_pred], axis=0)
+        if self.update_real and not self.update_fake:
+            y = y_true
+        elif not self.update_real and self.update_fake:
+            y = y_pred
+        elif self.update_real and self.update_fake:
+            y = tf.concat([y_true, y_pred], axis=0)
+        else:
+            return
         y = tf.image.resize(y, self.image_size)
         if y.shape[-1] == 1:
             y = tf.tile(y, [1,1,1,3])
@@ -47,18 +58,21 @@ class FID(tf.keras.metrics.Metric):
         y = self.inception_model(y)
         y_true, y_pred = tf.split(y, [n_real, n_fake], axis=0)
 
-        real_moment1 = tf.reduce_mean(y_true, axis=0)
-        real_moment2 = tf.reduce_mean(
-            y_true[:,:,tf.newaxis] * y_true[:,tf.newaxis,:], axis=0)
+        if self.update_real:
+            y_true = y[:n_real]
+            real_moment1 = tf.reduce_mean(y_true, axis=0)
+            real_moment2 = tf.reduce_mean(
+                y_true[:,:,tf.newaxis] * y_true[:,tf.newaxis,:], axis=0)
+            self.real_moment1.update_state(real_moment1, sample_weight=n_real)
+            self.real_moment2.update_state(real_moment2, sample_weight=n_real)
 
-        fake_moment1 = tf.reduce_mean(y_pred, axis=0)
-        fake_moment2 = tf.reduce_mean(
-            y_pred[:,:,tf.newaxis] * y_pred[:,tf.newaxis,:], axis=0)
-        
-        self.real_moment1.update_state(real_moment1, sample_weight=n_real)
-        self.real_moment2.update_state(real_moment2, sample_weight=n_real)
-        self.fake_moment1.update_state(fake_moment1, sample_weight=n_fake)
-        self.fake_moment2.update_state(fake_moment2, sample_weight=n_fake)
+        if self.update_fake:
+            y_pred = y[-n_fake:]
+            fake_moment1 = tf.reduce_mean(y_pred, axis=0)
+            fake_moment2 = tf.reduce_mean(
+                y_pred[:,:,tf.newaxis] * y_pred[:,tf.newaxis,:], axis=0)
+            self.fake_moment1.update_state(fake_moment1, sample_weight=n_fake)
+            self.fake_moment2.update_state(fake_moment2, sample_weight=n_fake)
 
     def result(self):
         real_moment1 = self.real_moment1.result()

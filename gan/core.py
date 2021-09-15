@@ -16,10 +16,10 @@ class GAN(tf.keras.Model):
         self.noise_fn = noise_fn
         self.gradient_penalty_weight = gradient_penalty_weight
 
-        g_input_shape = noise_fn(1).shape
-        d_input_shape = self.generator.compute_output_shape(g_input_shape)
-        d_output_shape = self.discriminator.compute_output_shape(d_input_shape)
-        self.d_output_shape = d_output_shape[1:]
+        g_input = noise_fn(1)
+        d_input = self.generator(g_input)
+        d_output = self.discriminator(d_input)
+        self.d_output_shape = d_output.shape[1:]
 
     @property
     def metrics(self):
