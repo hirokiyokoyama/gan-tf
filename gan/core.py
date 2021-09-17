@@ -20,6 +20,7 @@ class GAN(tf.keras.Model):
         d_input = self.generator(g_input)
         d_output = self.discriminator(d_input)
         self.d_output_shape = d_output.shape[1:]
+        self.output_names = ('generator', 'discriminator')
 
     @property
     def metrics(self):
@@ -42,9 +43,10 @@ class GAN(tf.keras.Model):
 
         if self.discriminator.trainable:
             d_inputs = tf.concat([real, fake], axis=0)
-            d_outputs = self.discriminator(d_inputs)
+            d_outputs_g = None
+            d_outputs_d = self.discriminator(d_inputs)
 
-            d_real, d_fake = tf.split(d_outputs, 2, axis=0)
+            d_real, d_fake = tf.split(d_outputs_d, 2, axis=0)
             tf.summary.histogram('d_real', d_real)
             tf.summary.histogram('d_fake', d_fake)
 
@@ -61,7 +63,8 @@ class GAN(tf.keras.Model):
                 gp_loss = 0.
         else:
             d_inputs = fake
-            d_outputs = self.discriminator(d_inputs)
+            d_outputs_g = self.discriminator(d_inputs)
+            d_outputs_d = None
             gp_loss = 0.
         self.add_loss(self.gradient_penalty_weight * gp_loss)
 
@@ -69,7 +72,7 @@ class GAN(tf.keras.Model):
             if self.discriminator.trainable:
                 self.frechet_distance.update_state(real, fake)
 
-        return d_outputs
+        return d_outputs_g, d_outputs_d
 
     def train_step(self, data):
         n = tf.shape(data)[0]
@@ -79,20 +82,16 @@ class GAN(tf.keras.Model):
         y_true = tf.concat([tf.ones(shape), tf.zeros(shape)], axis=0)
         self.discriminator.trainable = True
         self.generator.trainable = False
-        d_losses = super().train_step((data, y_true))
+        super().train_step((data, (None, y_true)))
 
         # generator step (fake only)
         y_true = tf.ones(shape)
         self.discriminator.trainable = False
         self.generator.trainable = True
-        g_losses = super().train_step((data, y_true))
+        losses = super().train_step((data, (y_true, None)))
 
         if self.frechet_distance is not None:
             tf.cond(tf.summary.should_record_summaries(),
                     lambda: tf.summary.scalar('frechet_distance', self.frechet_distance.result()),
                     lambda: False, name=self.name)
-
-        losses = {}
-        losses.update({'d_'+k: v for k, v in d_losses.items()})
-        losses.update({'g_'+k: v for k, v in g_losses.items()})
         return losses

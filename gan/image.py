@@ -25,9 +25,6 @@ class ImageGenerator(tf.keras.Model):
         return y
 
 class ImageDiscriminator(tf.keras.Model):
-    def _default_postprocess_fn(x):
-        return (x + 1.) / 2.
-
     def __init__(self, model, **kwargs):
         super().__init__(**kwargs)
         self.model = tf.keras.Model(
