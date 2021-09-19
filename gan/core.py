@@ -47,8 +47,8 @@ class GAN(tf.keras.Model):
             d_outputs_d = self.discriminator(d_inputs)
 
             d_real, d_fake = tf.split(d_outputs_d, 2, axis=0)
-            tf.summary.histogram('d_real', d_real)
-            tf.summary.histogram('d_fake', d_fake)
+            tf.summary.histogram('d_step/d_real', d_real)
+            tf.summary.histogram('d_step/d_fake', d_fake)
 
             if self.gradient_penalty_weight > 0.:
                 shape = tf.concat([[n], tf.ones([tf.rank(real)-1], tf.int32)], 0)
@@ -64,6 +64,7 @@ class GAN(tf.keras.Model):
         else:
             d_inputs = fake
             d_outputs_g = self.discriminator(d_inputs)
+            tf.summary.histogram('g_step/d_fake', d_outputs_g)
             d_outputs_d = None
             gp_loss = 0.
         self.add_loss(self.gradient_penalty_weight * gp_loss)
